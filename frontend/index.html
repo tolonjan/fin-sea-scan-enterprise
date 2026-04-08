@@ -12,7 +12,20 @@
     #map { width:75%; height:100vh; }
     #sidebar { width:25%; background:#020617; padding:15px; overflow:auto; }
 
-    .ship { padding:8px; border-bottom:1px solid #1f2937; cursor:pointer; }
+    input {
+      width:100%;
+      padding:8px;
+      margin-bottom:10px;
+      border-radius:6px;
+      border:none;
+    }
+
+    .ship {
+      padding:8px;
+      border-bottom:1px solid #1f2937;
+      cursor:pointer;
+    }
+
     .ship:hover { background:#1f2937; }
   </style>
 </head>
@@ -20,6 +33,7 @@
 <body>
 
 <div id="map"></div>
+
 <div id="sidebar">
   <h2>🚢 Fin Sea Scan Pro</h2>
   <input id="search" placeholder="Search MMSI..." />
@@ -31,6 +45,7 @@
 const API = "https://fin-sea-scan-enterprise.onrender.com";
 
 const map = L.map('map').setView([60,24],6);
+
 L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png').addTo(map);
 
 const list = document.getElementById("list");
@@ -46,21 +61,23 @@ function getColor(speed){
 // LOAD SHIPS
 // -------------------
 fetch(API + "/ships")
-.then(r=>r.json())
-.then(data=>{
+.then(r => r.json())
+.then(data => {
 
-  data.forEach(s=>{
+  console.log("Ships:", data);
 
-    const marker = L.circleMarker([s.lat,s.lon],{
-      color:getColor(s.speed),
-      radius:6
+  data.forEach(s => {
+
+    const marker = L.circleMarker([s.lat, s.lon], {
+      color: getColor(s.speed),
+      radius: 6
     }).addTo(map);
 
-    markers[s.mmsi]=marker;
+    markers[s.mmsi] = marker;
 
     const popup = `
-      <div>
-        <img src="https://source.unsplash.com/400x200/?ship" style="width:100%"/>
+      <div style="width:250px">
+        <img src="https://source.unsplash.com/400x200/?ship" style="width:100%;border-radius:6px"/>
         <b>MMSI:</b> ${s.mmsi}<br>
         <b>Speed:</b> ${s.speed} kn<br>
         <b>Destination:</b> ${s.destination}<br>
@@ -70,52 +87,41 @@ fetch(API + "/ships")
 
     marker.bindPopup(popup);
 
-    marker.on("click", ()=>{
-      fetch(API+"/history/"+s.mmsi)
-      .then(r=>r.json())
-      .then(points=>{
-        L.polyline(points.map(p=>[p.lat,p.lon]),{color:"yellow"}).addTo(map);
+    marker.on("click", () => {
+      fetch(API + "/history/" + s.mmsi)
+      .then(r => r.json())
+      .then(points => {
+        L.polyline(points.map(p => [p.lat, p.lon]), {color:"yellow"}).addTo(map);
       });
     });
 
     // sidebar
-    const el=document.createElement("div");
-    el.className="ship";
-    el.innerText=s.mmsi;
-    el.onclick=()=>{
-      map.setView([s.lat,s.lon],10);
+    const el = document.createElement("div");
+    el.className = "ship";
+    el.innerText = "MMSI: " + s.mmsi;
+
+    el.onclick = () => {
+      map.setView([s.lat, s.lon], 10);
       marker.openPopup();
     };
+
     list.appendChild(el);
 
   });
 
+})
+.catch(err => {
+  console.error("ERROR:", err);
 });
 
 // -------------------
 // SEARCH
 // -------------------
-document.getElementById("search").addEventListener("input",e=>{
-  const val=e.target.value;
-  Object.keys(markers).forEach(m=>{
-    markers[m].setStyle({opacity:m.includes(val)?1:0.1});
-  });
-});
+document.getElementById("search").addEventListener("input", e => {
+  const val = e.target.value;
 
-// -------------------
-// WEATHER
-// -------------------
-fetch(API+"/weather")
-.then(r=>r.json())
-.then(data=>{
-  data.forEach(w=>{
-    const lat=60+Math.random()*5;
-    const lon=20+Math.random()*10;
-
-    L.circle([lat,lon],{
-      color:"blue",
-      radius:20000+(w.wind*1000)
-    }).addTo(map);
+  Object.keys(markers).forEach(m => {
+    markers[m].setStyle({opacity: m.includes(val) ? 1 : 0.1});
   });
 });
 
