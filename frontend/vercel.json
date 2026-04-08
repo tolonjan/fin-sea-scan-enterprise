@@ -1,8 +1,6 @@
 {
-  "builds": [
-    {
-      "src": "index.html",
-      "use": "@vercel/static"
-    }
+  "routes": [
+    { "src": "^/$", "dest": "/frontend/index.html" },
+    { "src": "^/dashboard$", "dest": "/frontend/dashboard.html" }
   ]
-} 
+}
