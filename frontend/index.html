@@ -4,45 +4,69 @@
   <title>Fin Sea Scan</title>
   <meta charset="UTF-8" />
 
-  <!-- Leaflet -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <style>
-    body { margin: 0; font-family: Arial; background: #0b0f19; color: white; }
-    #map { height: 100vh; }
+    body { margin: 0; font-family: Arial; background: #0b0f19; color: white; display: flex; }
 
-    .title {
-      position: absolute;
-      top: 10px;
-      left: 10px;
-      z-index: 1000;
-      background: rgba(0,0,0,0.7);
-      padding: 10px 15px;
-      border-radius: 8px;
-      font-weight: bold;
+    #map { height: 100vh; width: 75%; }
+
+    #sidebar {
+      width: 25%;
+      background: #111827;
+      padding: 20px;
+      overflow-y: auto;
+    }
+
+    h2 { margin-top: 0; }
+
+    .card {
+      background: #1f2937;
+      padding: 10px;
+      margin-bottom: 10px;
+      border-radius: 6px;
+    }
+
+    .alert {
+      background: #7f1d1d;
+      padding: 8px;
+      border-radius: 5px;
+      margin-bottom: 5px;
     }
   </style>
 </head>
 
 <body>
 
-<div class="title">🚢 Fin Sea Scan</div>
 <div id="map"></div>
+
+<div id="sidebar">
+  <h2>🚢 Fin Sea Scan</h2>
+
+  <div class="card">
+    <b>Selected Vessel</b>
+    <div id="selected">Click a ship</div>
+  </div>
+
+  <div class="card">
+    <b>Alerts</b>
+    <div id="alerts"></div>
+  </div>
+</div>
 
 <script>
 const API = "https://fin-sea-scan-enterprise.onrender.com";
 
-// MAP
 const map = L.map('map').setView([60, 24], 6);
 
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  attribution: '&copy; OpenStreetMap'
-}).addTo(map);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-// -----------------------
-// LAIVAT
-// -----------------------
+// SELECTED UI
+const selectedDiv = document.getElementById("selected");
+const alertsDiv = document.getElementById("alerts");
+
+// SHIPS
 fetch(API + "/public/ships")
   .then(res => res.json())
   .then(data => {
@@ -56,44 +80,42 @@ fetch(API + "/public/ships")
 
       const marker = L.marker([lat, lon]).addTo(map);
 
-      marker.bindPopup(
-        "<b>MMSI:</b> " + mmsi + "<br>" +
-        "<b>Speed:</b> " + speed + " kn"
-      );
+      marker.on("click", () => {
+        selectedDiv.innerHTML =
+          "<b>MMSI:</b> " + mmsi + "<br>" +
+          "<b>Speed:</b> " + speed + " kn";
+      });
+
     });
 
   });
 
-// -----------------------
-// ALERTIT
-// -----------------------
+// ALERTS
 fetch(API + "/enterprise/alerts", {
   headers: { "x-api-key": "demo_key_123" }
 })
   .then(res => res.json())
   .then(alerts => {
 
-    alerts.slice(0, 50).forEach(alert => {
+    alerts.slice(0, 20).forEach(alert => {
 
-      // demo: satunnainen sijainti (voi myöhemmin parantaa)
+      const el = document.createElement("div");
+      el.className = "alert";
+      el.innerText = alert.risks.join(", ");
+
+      alertsDiv.appendChild(el);
+
+      // kartalle myös
       const lat = 60 + Math.random() * 5;
       const lon = 20 + Math.random() * 10;
 
-      const circle = L.circle([lat, lon], {
+      L.circle([lat, lon], {
         color: 'red',
-        fillColor: '#ff0000',
-        fillOpacity: 0.3,
         radius: 20000
       }).addTo(map);
-
-      circle.bindPopup(
-        "<b>⚠️ Alert</b><br>" +
-        alert.risks.join(", ")
-      );
     });
 
   });
-
 </script>
 
 </body>
