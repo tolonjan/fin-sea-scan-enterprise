@@ -1,18 +1,56 @@
 <!DOCTYPE html>
 <html>
-  <head>
-    <title>Fin Sea Scan</title>
-    <meta charset="UTF-8" />
-  </head>
-  <body>
-    <h1>Fin Sea Scan is running 🚢</h1>
+<head>
+  <title>Fin Sea Scan</title>
+  <meta charset="UTF-8" />
 
-    <script>
-      fetch("https://fin-sea-scan-enterprise.onrender.com/public/ships")
-        .then(res => res.json())
-        .then(data => {
-          document.body.innerHTML += "<pre>" + JSON.stringify(data.slice(0,5), null, 2) + "</pre>";
-        });
-    </script>
-  </body>
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <style>
+    body { margin: 0; font-family: Arial; }
+    #map { height: 100vh; }
+  </style>
+</head>
+
+<body>
+
+<div id="map"></div>
+
+<script>
+const API = "https://fin-sea-scan-enterprise.onrender.com";
+
+// create map
+const map = L.map('map').setView([60, 24], 6);
+
+// map tiles
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '&copy; OpenStreetMap'
+}).addTo(map);
+
+// fetch ships
+fetch(API + "/public/ships")
+  .then(res => res.json())
+  .then(data => {
+
+    data.features.slice(0, 200).forEach(ship => {
+
+      const lat = ship.geometry.coordinates[1];
+      const lon = ship.geometry.coordinates[0];
+      const mmsi = ship.properties.mmsi;
+      const speed = ship.properties.sog;
+
+      const marker = L.marker([lat, lon]).addTo(map);
+
+      marker.bindPopup(
+        "<b>MMSI:</b> " + mmsi + "<br>" +
+        "<b>Speed:</b> " + speed + " kn"
+      );
+    });
+
+  });
+</script>
+
+</body>
 </html>
