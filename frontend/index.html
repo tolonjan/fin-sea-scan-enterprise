@@ -9,27 +9,40 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <style>
-    body { margin: 0; font-family: Arial; }
+    body { margin: 0; font-family: Arial; background: #0b0f19; color: white; }
     #map { height: 100vh; }
+
+    .title {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 1000;
+      background: rgba(0,0,0,0.7);
+      padding: 10px 15px;
+      border-radius: 8px;
+      font-weight: bold;
+    }
   </style>
 </head>
 
 <body>
 
+<div class="title">🚢 Fin Sea Scan</div>
 <div id="map"></div>
 
 <script>
 const API = "https://fin-sea-scan-enterprise.onrender.com";
 
-// create map
+// MAP
 const map = L.map('map').setView([60, 24], 6);
 
-// map tiles
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   attribution: '&copy; OpenStreetMap'
 }).addTo(map);
 
-// fetch ships
+// -----------------------
+// LAIVAT
+// -----------------------
 fetch(API + "/public/ships")
   .then(res => res.json())
   .then(data => {
@@ -50,6 +63,37 @@ fetch(API + "/public/ships")
     });
 
   });
+
+// -----------------------
+// ALERTIT
+// -----------------------
+fetch(API + "/enterprise/alerts", {
+  headers: { "x-api-key": "demo_key_123" }
+})
+  .then(res => res.json())
+  .then(alerts => {
+
+    alerts.slice(0, 50).forEach(alert => {
+
+      // demo: satunnainen sijainti (voi myöhemmin parantaa)
+      const lat = 60 + Math.random() * 5;
+      const lon = 20 + Math.random() * 10;
+
+      const circle = L.circle([lat, lon], {
+        color: 'red',
+        fillColor: '#ff0000',
+        fillOpacity: 0.3,
+        radius: 20000
+      }).addTo(map);
+
+      circle.bindPopup(
+        "<b>⚠️ Alert</b><br>" +
+        alert.risks.join(", ")
+      );
+    });
+
+  });
+
 </script>
 
 </body>
