@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Fin Sea Scan Analytics</title>
+  <meta charset="UTF-8" />
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    body {
+      margin:0;
+      font-family: Arial;
+      background:#0b0f19;
+      color:white;
+      padding:20px;
+    }
+
+    h1 { margin-top:0; }
+
+    .grid {
+      display:grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap:15px;
+    }
+
+    .card {
+      background:#111827;
+      padding:15px;
+      border-radius:8px;
+    }
+
+    canvas {
+      background:#020617;
+      border-radius:6px;
+      padding:10px;
+    }
+  </style>
+</head>
+
+<body>
+
+<h1>📊 Maritime Analytics (24h)</h1>
+
+<div class="grid">
+
+  <div class="card">
+    <h3>Active vessels</h3>
+    <h1 id="vessels">-</h1>
+  </div>
+
+  <div class="card">
+    <h3>Avg speed</h3>
+    <h1 id="speed">-</h1>
+  </div>
+
+  <div class="card">
+    <h3>Estimated traffic (24h)</h3>
+    <h1 id="traffic">-</h1>
+  </div>
+
+</div>
+
+<br>
+
+<div class="grid">
+
+  <div class="card">
+    <h3>Traffic distribution</h3>
+    <canvas id="speedChart"></canvas>
+  </div>
+
+  <div class="card">
+    <h3>Traffic trend</h3>
+    <canvas id="trendChart"></canvas>
+  </div>
+
+  <div class="card">
+    <h3>Top ports</h3>
+    <canvas id="portChart"></canvas>
+  </div>
+
+</div>
+
+<script>
+
+const API = "https://fin-sea-scan-enterprise.onrender.com";
+
+// -------------------
+// LOAD DATA
+// -------------------
+fetch(API + "/ships")
+.then(r => r.json())
+.then(data => {
+
+  document.getElementById("vessels").innerText = data.length;
+
+  const avgSpeed = (data.reduce((a,b)=>a+b.speed,0)/data.length).toFixed(1);
+  document.getElementById("speed").innerText = avgSpeed + " kn";
+
+  document.getElementById("traffic").innerText = data.length * 24;
+
+  // -------------------
+  // SPEED DISTRIBUTION
+  // -------------------
+  let slow=0, medium=0, fast=0;
+
+  data.forEach(s=>{
+    if(s.speed<10) slow++;
+    else if(s.speed<20) medium++;
+    else fast++;
+  });
+
+  new Chart(document.getElementById("speedChart"), {
+    type: "pie",
+    data: {
+      labels:["Slow","Medium","Fast"],
+      datasets:[{
+        data:[slow,medium,fast]
+      }]
+    }
+  });
+
+  // -------------------
+  // TREND (simuloitu 24h)
+  // -------------------
+  const trend = Array.from({length:24}, (_,i)=>Math.floor(data.length * (0.7 + Math.random()*0.6)));
+
+  new Chart(document.getElementById("trendChart"), {
+    type: "line",
+    data: {
+      labels: [...Array(24).keys()],
+      datasets: [{
+        label:"Ships",
+        data: trend
+      }]
+    }
+  });
+
+  // -------------------
+  // PORTS
+  // -------------------
+  const ports = {};
+
+  data.forEach(s=>{
+    ports[s.destination] = (ports[s.destination] || 0) + 1;
+  });
+
+  const labels = Object.keys(ports);
+  const values = Object.values(ports);
+
+  new Chart(document.getElementById("portChart"), {
+    type: "bar",
+    data: {
+      labels: labels,
+      datasets: [{
+        label:"Traffic",
+        data: values
+      }]
+    }
+  });
+
+});
+
+</script>
+
+</body>
+</html>
