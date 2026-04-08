@@ -23,45 +23,34 @@
 
     #sidebar {
       width: 25%;
-      background: #111827;
-      padding: 20px;
+      background: #020617;
+      padding: 15px;
       overflow-y: auto;
     }
 
-    h2 {
-      margin-top: 0;
-    }
-
-    .card {
-      background: #1f2937;
-      padding: 10px;
+    input {
+      width: 100%;
+      padding: 8px;
       margin-bottom: 10px;
       border-radius: 6px;
+      border: none;
     }
 
-    .alert {
-      background: #7f1d1d;
-      padding: 6px;
+    .ship {
+      padding: 8px;
+      border-bottom: 1px solid #1f2937;
+      cursor: pointer;
+    }
+
+    .ship:hover {
+      background: #1f2937;
+    }
+
+    .popup img {
+      width: 100%;
+      border-radius: 6px;
       margin-bottom: 5px;
-      border-radius: 4px;
     }
-
-    .popup h3 {
-      margin: 0;
-      font-size: 16px;
-    }
-
-    .badge {
-      padding: 3px 6px;
-      border-radius: 4px;
-      font-size: 12px;
-      display: inline-block;
-      margin-top: 5px;
-    }
-
-    .fast { background: red; }
-    .medium { background: orange; }
-    .slow { background: green; }
   </style>
 </head>
 
@@ -72,22 +61,9 @@
 <div id="sidebar">
   <h2>🚢 Fin Sea Scan</h2>
 
-  <div class="card">
-    <b>Selected Vessel</b>
-    <div id="selected">Click a ship</div>
-  </div>
+  <input id="search" placeholder="Search MMSI..." />
 
-  <div class="card">
-    <b>Alerts</b>
-    <div id="alerts"></div>
-  </div>
-
-  <div class="card">
-    <b>Layers</b><br/>
-    🔴 Alerts<br/>
-    🔵 Wind<br/>
-    ⚪ Ice
-  </div>
+  <div id="shipList"></div>
 </div>
 
 <script>
@@ -96,71 +72,84 @@ const API = "https://fin-sea-scan-enterprise.onrender.com";
 
 const map = L.map('map').setView([60, 24], 6);
 
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+// DARK MAP
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
 
-const selectedDiv = document.getElementById("selected");
-const alertsDiv = document.getElementById("alerts");
+const shipList = document.getElementById("shipList");
+const markers = {};
 
-// SPEED COLOR
+// COLOR
 function getColor(speed) {
   if (speed > 20) return "red";
   if (speed > 10) return "orange";
-  return "green";
-}
-
-function getBadge(speed) {
-  if (speed > 20) return "fast";
-  if (speed > 10) return "medium";
-  return "slow";
+  return "lime";
 }
 
 // -------------------
-// SHIPS (AIS)
+// LOAD SHIPS
 // -------------------
 fetch(API + "/public/ships")
   .then(res => res.json())
   .then(data => {
 
-    data.features.slice(0, 200).forEach(ship => {
+    data.features.slice(0, 300).forEach(ship => {
 
       const lat = ship.geometry.coordinates[1];
       const lon = ship.geometry.coordinates[0];
       const mmsi = ship.properties.mmsi;
       const speed = ship.properties.sog || 0;
       const cog = ship.properties.cog || "-";
-      const heading = ship.properties.trueHeading || "-";
 
+      // marker
       const marker = L.circleMarker([lat, lon], {
         color: getColor(speed),
         radius: 6
       }).addTo(map);
 
-      const popupHTML = `
+      markers[mmsi] = marker;
+
+      // popup
+      const popup = `
         <div class="popup">
-          <h3>🚢 Vessel</h3>
+          <img src="https://source.unsplash.com/400x200/?ship" />
           <b>MMSI:</b> ${mmsi}<br>
           <b>Speed:</b> ${speed} kn<br>
-          <b>Course:</b> ${cog}<br>
-          <b>Heading:</b> ${heading}<br>
-          <span class="badge ${getBadge(speed)}">
-            ${speed > 20 ? "Fast" : speed > 10 ? "Medium" : "Slow"}
-          </span>
+          <b>Course:</b> ${cog}
         </div>
       `;
 
-      marker.bindPopup(popupHTML);
+      marker.bindPopup(popup);
 
-      marker.on("click", () => {
-        selectedDiv.innerHTML = popupHTML;
-      });
+      // sidebar item
+      const el = document.createElement("div");
+      el.className = "ship";
+      el.innerText = "MMSI: " + mmsi;
 
-      marker.on("mouseover", function () {
-        this.openPopup();
-      });
+      el.onclick = () => {
+        map.setView([lat, lon], 10);
+        marker.openPopup();
+      };
+
+      shipList.appendChild(el);
 
     });
 
   });
+
+// -------------------
+// SEARCH
+// -------------------
+document.getElementById("search").addEventListener("input", e => {
+  const val = e.target.value;
+
+  Object.keys(markers).forEach(mmsi => {
+    if (mmsi.includes(val)) {
+      markers[mmsi].setStyle({ opacity: 1 });
+    } else {
+      markers[mmsi].setStyle({ opacity: 0.1 });
+    }
+  });
+});
 
 // -------------------
 // ALERTS
@@ -168,64 +157,41 @@ fetch(API + "/public/ships")
 fetch(API + "/enterprise/alerts", {
   headers: { "x-api-key": "demo_key_123" }
 })
-  .then(res => res.json())
-  .then(alerts => {
+.then(res => res.json())
+.then(alerts => {
+  alerts.slice(0, 20).forEach(a => {
 
-    alerts.slice(0, 20).forEach(alert => {
+    const lat = 60 + Math.random() * 5;
+    const lon = 20 + Math.random() * 10;
 
-      const el = document.createElement("div");
-      el.className = "alert";
-      el.innerText = alert.risks.join(", ");
-      alertsDiv.appendChild(el);
-
-      const lat = 60 + Math.random() * 5;
-      const lon = 20 + Math.random() * 10;
-
-      L.circle([lat, lon], {
-        color: 'red',
-        radius: 20000
-      }).addTo(map);
-
-    });
+    L.circle([lat, lon], {
+      color: 'red',
+      radius: 20000
+    }).addTo(map);
 
   });
+});
 
 // -------------------
-// WEATHER (FMI)
+// WEATHER
 // -------------------
 fetch(API + "/weather")
-  .then(res => res.json())
-  .then(data => {
+.then(res => res.json())
+.then(data => {
 
-    data.forEach(w => {
+  data.forEach(w => {
 
-      const lat = 60 + Math.random() * 5;
-      const lon = 20 + Math.random() * 10;
+    const lat = 60 + Math.random() * 5;
+    const lon = 20 + Math.random() * 10;
 
-      L.circle([lat, lon], {
-        color: 'blue',
-        fillOpacity: 0.2,
-        radius: 20000 + (w.wind * 1000)
-      }).addTo(map)
-      .bindPopup("🌬 Wind: " + w.wind + " m/s");
-
-    });
+    L.circle([lat, lon], {
+      color: 'blue',
+      radius: 20000 + (w.wind * 1000)
+    }).addTo(map);
 
   });
 
-// -------------------
-// ICE (demo)
-// -------------------
-for (let i = 0; i < 6; i++) {
-  const lat = 62 + Math.random() * 5;
-  const lon = 20 + Math.random() * 10;
-
-  L.circle([lat, lon], {
-    color: 'white',
-    fillOpacity: 0.3,
-    radius: 40000
-  }).addTo(map).bindPopup("🧊 Ice area");
-}
+});
 
 </script>
 
