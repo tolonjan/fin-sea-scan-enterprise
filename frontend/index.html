@@ -9,11 +9,34 @@
 
   <style>
     body { margin: 0; display: flex; font-family: Arial; background:#0b0f19; color:white; }
+
     #map { height: 100vh; width: 75%; }
     #sidebar { width: 25%; background:#111827; padding:20px; overflow:auto; }
 
     .card { background:#1f2937; padding:10px; margin-bottom:10px; border-radius:6px; }
     .alert { background:#7f1d1d; padding:6px; margin-bottom:5px; border-radius:4px; }
+
+    .popup {
+      font-size: 14px;
+      line-height: 1.4;
+    }
+
+    .popup h3 {
+      margin: 0 0 5px 0;
+      font-size: 16px;
+    }
+
+    .badge {
+      display:inline-block;
+      padding:2px 6px;
+      border-radius:4px;
+      font-size:12px;
+      margin-top:4px;
+    }
+
+    .fast { background:#dc2626; }
+    .medium { background:#f59e0b; }
+    .slow { background:#16a34a; }
   </style>
 </head>
 
@@ -33,34 +56,21 @@
     <b>Alerts</b>
     <div id="alerts"></div>
   </div>
-
-  <div class="card">
-    <b>Layers</b><br/>
-    🌬 Wind<br/>
-    🧊 Ice (demo)
-  </div>
 </div>
 
 <script>
 
-// ---------------------------
-// SIMPLE LOGIN
-// ---------------------------
+// LOGIN (simple paywall)
 const password = "demo123";
 const input = prompt("Enter access code:");
-
 if (input !== password) {
   document.body.innerHTML = "Access denied";
 }
 
-// ---------------------------
 // CONFIG
-// ---------------------------
 const API = "https://fin-sea-scan-enterprise.onrender.com";
 
-// ---------------------------
 // MAP
-// ---------------------------
 const map = L.map('map').setView([60, 24], 6);
 
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
@@ -68,9 +78,23 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 const selectedDiv = document.getElementById("selected");
 const alertsDiv = document.getElementById("alerts");
 
-// ---------------------------
+// SPEED COLOR
+function getColor(speed) {
+  if (speed > 20) return "red";
+  if (speed > 10) return "orange";
+  return "green";
+}
+
+// SPEED BADGE
+function getBadge(speed) {
+  if (speed > 20) return "fast";
+  if (speed > 10) return "medium";
+  return "slow";
+}
+
+// -------------------
 // SHIPS
-// ---------------------------
+// -------------------
 fetch(API + "/public/ships")
   .then(res => res.json())
   .then(data => {
@@ -80,23 +104,43 @@ fetch(API + "/public/ships")
       const lat = ship.geometry.coordinates[1];
       const lon = ship.geometry.coordinates[0];
       const mmsi = ship.properties.mmsi;
-      const speed = ship.properties.sog;
+      const speed = ship.properties.sog || 0;
+      const cog = ship.properties.cog || "-";
+      const heading = ship.properties.trueHeading || "-";
 
-      const marker = L.marker([lat, lon]).addTo(map);
+      const marker = L.circleMarker([lat, lon], {
+        color: getColor(speed),
+        radius: 6
+      }).addTo(map);
+
+      const popupHTML = `
+        <div class="popup">
+          <h3>🚢 Vessel</h3>
+          <b>MMSI:</b> ${mmsi}<br>
+          <b>Speed:</b> ${speed} kn<br>
+          <b>Course:</b> ${cog}<br>
+          <b>Heading:</b> ${heading}<br>
+          <span class="badge ${getBadge(speed)}">${speed > 20 ? "Fast" : speed > 10 ? "Medium" : "Slow"}</span>
+        </div>
+      `;
+
+      marker.bindPopup(popupHTML);
 
       marker.on("click", () => {
-        selectedDiv.innerHTML =
-          "<b>MMSI:</b> " + mmsi + "<br>" +
-          "<b>Speed:</b> " + speed + " kn";
+        selectedDiv.innerHTML = popupHTML;
+      });
+
+      marker.on("mouseover", function () {
+        this.openPopup();
       });
 
     });
 
   });
 
-// ---------------------------
+// -------------------
 // ALERTS
-// ---------------------------
+// -------------------
 fetch(API + "/enterprise/alerts", {
   headers: { "x-api-key": "demo_key_123" }
 })
@@ -121,9 +165,9 @@ fetch(API + "/enterprise/alerts", {
 
   });
 
-// ---------------------------
-// REAL FMI WEATHER
-// ---------------------------
+// -------------------
+// WEATHER (FMI)
+// -------------------
 fetch(API + "/weather")
   .then(res => res.json())
   .then(data => {
@@ -138,15 +182,15 @@ fetch(API + "/weather")
         fillOpacity: 0.2,
         radius: 20000 + (w.wind * 1000)
       }).addTo(map)
-      .bindPopup("Wind: " + w.wind + " m/s");
+      .bindPopup("🌬 Wind: " + w.wind + " m/s");
 
     });
 
   });
 
-// ---------------------------
-// ICE (demo layer)
-// ---------------------------
+// -------------------
+// ICE (demo)
+// -------------------
 for (let i = 0; i < 6; i++) {
   const lat = 62 + Math.random() * 5;
   const lon = 20 + Math.random() * 10;
@@ -155,7 +199,7 @@ for (let i = 0; i < 6; i++) {
     color: 'white',
     fillOpacity: 0.3,
     radius: 40000
-  }).addTo(map).bindPopup("Ice area");
+  }).addTo(map).bindPopup("🧊 Ice area");
 }
 
 </script>
