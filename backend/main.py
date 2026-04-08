@@ -1,7 +1,6 @@
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-import requests
-import re
+import requests, math, random, re
 
 app = FastAPI()
 
@@ -15,55 +14,78 @@ app.add_middleware(
 FINTRAFFIC = "https://meri.digitraffic.fi/api/ais/v1/locations"
 FMI = "https://opendata.fmi.fi/wfs"
 
-API_KEYS = ["demo_key_123"]
+# -------------------
+# PORTS
+# -------------------
+PORTS = [
+    {"name": "Helsinki", "lat": 60.17, "lon": 24.94},
+    {"name": "Stockholm", "lat": 59.33, "lon": 18.06},
+    {"name": "Tallinn", "lat": 59.44, "lon": 24.75},
+]
 
-# ---------------------------
-# AUTH (simple paywall)
-# ---------------------------
-@app.middleware("http")
-async def check_key(request: Request, call_next):
-    if request.url.path.startswith("/public") or request.url.path.startswith("/weather"):
-        return await call_next(request)
+def closest_port(lat, lon):
+    best = None
+    best_dist = 999
 
-    key = request.headers.get("x-api-key")
-    if key not in API_KEYS:
-        raise HTTPException(status_code=401, detail="Invalid API key")
+    for p in PORTS:
+        d = math.hypot(lat - p["lat"], lon - p["lon"])
+        if d < best_dist:
+            best = p
+            best_dist = d
 
-    return await call_next(request)
+    return best
 
-# ---------------------------
+# -------------------
 # SHIPS
-# ---------------------------
-@app.get("/public/ships")
+# -------------------
+@app.get("/ships")
 def ships():
-    return requests.get(FINTRAFFIC).json()
-
-# ---------------------------
-# ALERTS (simple logic)
-# ---------------------------
-@app.get("/enterprise/alerts")
-def alerts():
     data = requests.get(FINTRAFFIC).json()
+
     result = []
 
-    for ship in data.get("features", [])[:100]:
+    for ship in data.get("features", [])[:200]:
+        lat = ship["geometry"]["coordinates"][1]
+        lon = ship["geometry"]["coordinates"][0]
         speed = ship["properties"].get("sog", 0)
+        mmsi = ship["properties"]["mmsi"]
 
-        risks = []
-        if speed > 25:
-            risks.append("High speed")
+        port = closest_port(lat, lon)
 
-        if risks:
-            result.append({
-                "mmsi": ship["properties"]["mmsi"],
-                "risks": risks
-            })
+        distance = abs(lat - port["lat"]) + abs(lon - port["lon"])
+        eta = distance / (speed / 10 + 0.1)
+
+        result.append({
+            "mmsi": mmsi,
+            "lat": lat,
+            "lon": lon,
+            "speed": speed,
+            "cog": ship["properties"].get("cog"),
+            "heading": ship["properties"].get("trueHeading"),
+            "destination": port["name"],
+            "eta": round(eta, 1)
+        })
 
     return result
 
-# ---------------------------
-# FMI WEATHER (REAL)
-# ---------------------------
+# -------------------
+# HISTORY
+# -------------------
+@app.get("/history/{mmsi}")
+def history(mmsi: int):
+    lat, lon = 60, 24
+    points = []
+
+    for i in range(15):
+        lat += random.uniform(-0.1, 0.1)
+        lon += random.uniform(-0.1, 0.1)
+        points.append({"lat": lat, "lon": lon})
+
+    return points
+
+# -------------------
+# WEATHER (FMI)
+# -------------------
 @app.get("/weather")
 def weather():
     params = {
@@ -76,20 +98,4 @@ def weather():
     res = requests.get(FMI, params=params)
     values = re.findall(r"<wml2:value>(.*?)</wml2:value>", res.text)
 
-    result = []
-    for v in values[:20]:
-        try:
-            result.append({"wind": float(v)})
-        except:
-            pass
-
-    return result
-
-# ---------------------------
-# STRIPE PLACEHOLDER
-# ---------------------------
-@app.get("/create-checkout")
-def create_checkout():
-    return {
-        "url": "https://buy.stripe.com/test_placeholder"
-    }
+    return [{"wind": float(v)} for v in values[:15]]
