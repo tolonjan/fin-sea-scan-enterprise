@@ -12,21 +12,8 @@
     #map { height: 100vh; width: 75%; }
     #sidebar { width: 25%; background:#111827; padding:20px; overflow:auto; }
 
-    h2 { margin-top: 0; }
-
-    .card {
-      background:#1f2937;
-      padding:10px;
-      margin-bottom:10px;
-      border-radius:6px;
-    }
-
-    .alert {
-      background:#7f1d1d;
-      padding:6px;
-      margin-bottom:5px;
-      border-radius:4px;
-    }
+    .card { background:#1f2937; padding:10px; margin-bottom:10px; border-radius:6px; }
+    .alert { background:#7f1d1d; padding:6px; margin-bottom:5px; border-radius:4px; }
   </style>
 </head>
 
@@ -49,14 +36,31 @@
 
   <div class="card">
     <b>Layers</b><br/>
-    🌬 Wind: blue<br/>
-    🧊 Ice: white
+    🌬 Wind<br/>
+    🧊 Ice (demo)
   </div>
 </div>
 
 <script>
+
+// ---------------------------
+// SIMPLE LOGIN
+// ---------------------------
+const password = "demo123";
+const input = prompt("Enter access code:");
+
+if (input !== password) {
+  document.body.innerHTML = "Access denied";
+}
+
+// ---------------------------
+// CONFIG
+// ---------------------------
 const API = "https://fin-sea-scan-enterprise.onrender.com";
 
+// ---------------------------
+// MAP
+// ---------------------------
 const map = L.map('map').setView([60, 24], 6);
 
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
@@ -64,9 +68,9 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 const selectedDiv = document.getElementById("selected");
 const alertsDiv = document.getElementById("alerts");
 
-// -------------------
+// ---------------------------
 // SHIPS
-// -------------------
+// ---------------------------
 fetch(API + "/public/ships")
   .then(res => res.json())
   .then(data => {
@@ -90,9 +94,9 @@ fetch(API + "/public/ships")
 
   });
 
-// -------------------
+// ---------------------------
 // ALERTS
-// -------------------
+// ---------------------------
 fetch(API + "/enterprise/alerts", {
   headers: { "x-api-key": "demo_key_123" }
 })
@@ -117,23 +121,32 @@ fetch(API + "/enterprise/alerts", {
 
   });
 
-// -------------------
-// WIND LAYER (demo)
-// -------------------
-for (let i = 0; i < 10; i++) {
-  const lat = 60 + Math.random() * 5;
-  const lon = 20 + Math.random() * 10;
+// ---------------------------
+// REAL FMI WEATHER
+// ---------------------------
+fetch(API + "/weather")
+  .then(res => res.json())
+  .then(data => {
 
-  L.circle([lat, lon], {
-    color: 'blue',
-    fillOpacity: 0.2,
-    radius: 30000
-  }).addTo(map).bindPopup("Wind area");
-}
+    data.forEach(w => {
 
-// -------------------
-// ICE LAYER (demo)
-// -------------------
+      const lat = 60 + Math.random() * 5;
+      const lon = 20 + Math.random() * 10;
+
+      L.circle([lat, lon], {
+        color: 'blue',
+        fillOpacity: 0.2,
+        radius: 20000 + (w.wind * 1000)
+      }).addTo(map)
+      .bindPopup("Wind: " + w.wind + " m/s");
+
+    });
+
+  });
+
+// ---------------------------
+// ICE (demo layer)
+// ---------------------------
 for (let i = 0; i < 6; i++) {
   const lat = 62 + Math.random() * 5;
   const lon = 20 + Math.random() * 10;
