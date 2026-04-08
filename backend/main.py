@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-import requests, math, random, re
+import requests, math, random
 
 app = FastAPI()
 
@@ -12,7 +12,6 @@ app.add_middleware(
 )
 
 FINTRAFFIC = "https://meri.digitraffic.fi/api/ais/v1/locations"
-FMI = "https://opendata.fmi.fi/wfs"
 
 # -------------------
 # PORTS
@@ -36,17 +35,21 @@ def closest_port(lat, lon):
     return best
 
 # -------------------
-# SHIPS
+# SHIPS (MAIN)
 # -------------------
 @app.get("/ships")
 def ships():
-    data = requests.get(FINTRAFFIC).json()
+    try:
+        data = requests.get(FINTRAFFIC, timeout=10).json()
+    except:
+        return []
 
     result = []
 
     for ship in data.get("features", [])[:200]:
         lat = ship["geometry"]["coordinates"][1]
         lon = ship["geometry"]["coordinates"][0]
+
         speed = ship["properties"].get("sog", 0)
         mmsi = ship["properties"]["mmsi"]
 
@@ -84,18 +87,8 @@ def history(mmsi: int):
     return points
 
 # -------------------
-# WEATHER (FMI)
+# HEALTH CHECK
 # -------------------
-@app.get("/weather")
-def weather():
-    params = {
-        "service": "WFS",
-        "request": "getFeature",
-        "storedquery_id": "fmi::observations::weather::simple",
-        "parameters": "windspeedms"
-    }
-
-    res = requests.get(FMI, params=params)
-    values = re.findall(r"<wml2:value>(.*?)</wml2:value>", res.text)
-
-    return [{"wind": float(v)} for v in values[:15]]
+@app.get("/")
+def root():
+    return {"status": "ok"}
