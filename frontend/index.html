@@ -32,6 +32,15 @@ input {
   padding:10px;
   border-radius:6px;
   border:none;
+  margin-bottom:15px;
+}
+
+h2 { margin-top:0; }
+
+.legend { font-size:12px; margin-top:15px; }
+.dot {
+  width:10px; height:10px; border-radius:50%;
+  display:inline-block; margin-right:6px;
 }
 </style>
 </head>
@@ -42,12 +51,19 @@ input {
 
 <div id="sidebar">
   <h2>🚢 Fin Sea Scan Pro</h2>
+
   <input id="search" placeholder="Search MMSI..." />
+
+  <div class="legend">
+    <div><span class="dot" style="background:lime"></span>Normal</div>
+    <div><span class="dot" style="background:red"></span>Fast</div>
+  </div>
 </div>
 
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
 <script>
+
 const map = L.map('map').setView([60.17, 24.94], 5);
 
 L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
@@ -55,12 +71,32 @@ L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').add
 let markers = [];
 let tracks = {};
 
-function clearMap() {
-  markers.forEach(m => map.removeLayer(m));
-  markers = [];
+// -------------------
+// PORTS + ETA
+// -------------------
+const PORTS = [
+  { name: "Helsinki", lat: 60.17, lon: 24.94 },
+  { name: "Stockholm", lat: 59.33, lon: 18.06 },
+  { name: "Tallinn", lat: 59.44, lon: 24.75 }
+];
+
+function closestPort(lat, lon) {
+  return PORTS.reduce((best, p) => {
+    const d = Math.hypot(lat - p.lat, lon - p.lon);
+    return d < best.dist ? { port: p, dist: d } : best;
+  }, { port: PORTS[0], dist: Infinity }).port;
 }
 
-function createShipIcon(heading) {
+function calcETA(lat, lon, speed, port) {
+  if (!speed || speed < 1) return "N/A";
+  const dist = Math.hypot(lat - port.lat, lon - port.lon);
+  return (dist / (speed / 10 + 0.1)).toFixed(1) + " h";
+}
+
+// -------------------
+// ICON
+// -------------------
+function shipIcon(heading) {
   return L.divIcon({
     html: `<div style="
       transform: rotate(${heading || 0}deg);
@@ -70,13 +106,17 @@ function createShipIcon(heading) {
   });
 }
 
+// -------------------
+// LOAD SHIPS
+// -------------------
 function loadShips() {
 
   fetch("https://meri.digitraffic.fi/api/ais/v1/locations")
     .then(r => r.json())
     .then(data => {
 
-      clearMap();
+      markers.forEach(m => map.removeLayer(m));
+      markers = [];
 
       data.features.forEach(ship => {
 
@@ -92,36 +132,58 @@ function loadShips() {
           const speed = props.sog || 0;
           const heading = props.trueHeading || 0;
 
-          // 🚢 ICON
+          const port = closestPort(lat, lon);
+          const eta = calcETA(lat, lon, speed, port);
+          const name = props.name || props.shipname || "Vessel " + mmsi;
+
+          // ICON
           const marker = L.marker([lat, lon], {
-            icon: createShipIcon(heading)
+            icon: shipIcon(heading)
           }).addTo(map);
 
-          // 📈 TRACK LINE
+          // TRACK
           if (!tracks[mmsi]) tracks[mmsi] = [];
-
           tracks[mmsi].push([lat, lon]);
-
-          if (tracks[mmsi].length > 10) {
-            tracks[mmsi].shift();
-          }
+          if (tracks[mmsi].length > 8) tracks[mmsi].shift();
 
           L.polyline(tracks[mmsi], {
             color: "cyan",
             weight: 1
           }).addTo(map);
 
-          // 💬 POPUP
+          // POPUP
+          const image = "https://source.unsplash.com/400x200/?cargo,ship";
+
           marker.bindPopup(`
-            <div style="color:black">
-              <b>MMSI:</b> ${mmsi}<br>
-              <b>Speed:</b> ${speed} kn<br>
-              <b>Heading:</b> ${heading}
+            <div style="color:#111;width:250px;font-family:Arial">
+
+              <img src="${image}" style="width:100%;border-radius:6px;margin-bottom:6px"/>
+
+              <div style="font-weight:bold;font-size:15px;color:#0b3d91">
+                🚢 ${name}
+              </div>
+
+              <div style="font-size:13px">
+
+                <div><b>MMSI:</b> ${mmsi}</div>
+                <div><b>Speed:</b> ${speed} kn</div>
+                <div><b>Course:</b> ${props.cog || "-"}°</div>
+
+                <hr style="margin:6px 0">
+
+                <div><b>Destination:</b> ${port.name}</div>
+                <div><b>ETA:</b> ${eta}</div>
+
+                <div style="margin-top:6px;font-size:12px;color:#555">
+                  📍 ${lat.toFixed(3)}, ${lon.toFixed(3)}
+                </div>
+
+              </div>
+
             </div>
           `);
 
           marker.mmsi = mmsi;
-
           markers.push(marker);
 
         } catch(e) {}
@@ -134,7 +196,9 @@ function loadShips() {
 loadShips();
 setInterval(loadShips, 20000);
 
-// 🔍 SEARCH
+// -------------------
+// SEARCH
+// -------------------
 document.getElementById("search").addEventListener("input", e => {
   const val = e.target.value;
 
