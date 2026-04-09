@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <title>Fin Sea Scan Pro</title>
 
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
 
   <style>
     body {
@@ -47,8 +47,25 @@
     }
 
     .info {
-      font-size: 14px;
+      font-size: 13px;
       opacity: 0.7;
+    }
+
+    .legend {
+      margin-top: 20px;
+      font-size: 12px;
+    }
+
+    .legend div {
+      margin-bottom: 6px;
+    }
+
+    .dot {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      margin-right: 6px;
     }
   </style>
 </head>
@@ -59,8 +76,15 @@
 
 <div id="sidebar">
   <h1>🚢 Fin Sea Scan Pro</h1>
+
   <input id="search" placeholder="Search MMSI..." />
+
   <div class="info">Live AIS data (Digitraffic)</div>
+
+  <div class="legend">
+    <div><span class="dot" style="background:lime"></span>Normal</div>
+    <div><span class="dot" style="background:red"></span>Fast vessel</div>
+  </div>
 </div>
 
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
@@ -77,6 +101,43 @@
   function clearMarkers() {
     markers.forEach(m => map.removeLayer(m));
     markers = [];
+  }
+
+  function createPopup(mmsi, speed, props, lat, lon) {
+    return `
+      <div style="
+        font-family: Arial;
+        color: #111;
+        min-width: 230px;
+      ">
+
+        <div style="
+          font-weight: bold;
+          font-size: 15px;
+          margin-bottom: 6px;
+          color: #0b3d91;
+        ">
+          🚢 Vessel ${mmsi}
+        </div>
+
+        <div style="font-size: 13px; line-height: 1.5">
+
+          <div><b>Speed:</b> ${speed} kn</div>
+          <div><b>Course:</b> ${props.cog || "-"}°</div>
+          <div><b>Heading:</b> ${props.trueHeading || "-"}°</div>
+
+          <hr style="margin:6px 0; border:0; border-top:1px solid #ddd;">
+
+          <div><b>Navigation:</b> ${props.navStat || "Unknown"}</div>
+
+          <div style="margin-top:6px; font-size:12px; color:#555">
+            📍 ${lat.toFixed(3)}, ${lon.toFixed(3)}
+          </div>
+
+        </div>
+
+      </div>
+    `;
   }
 
   function loadShips() {
@@ -97,23 +158,20 @@
 
             const lat = coords[1];
             const lon = coords[0];
-
             const speed = props.sog || 0;
             const mmsi = props.mmsi || "N/A";
 
             const marker = L.circleMarker([lat, lon], {
               radius: 5,
               color: speed > 15 ? "red" : "lime",
-              fillOpacity: 0.8
+              fillOpacity: 0.9
             }).addTo(map);
 
-            marker.bindPopup(`
-              <div style="color:black">
-                <b>MMSI:</b> ${mmsi}<br>
-                <b>Speed:</b> ${speed}<br>
-                <b>Heading:</b> ${props.trueHeading || "-"}
-              </div>
-            `);
+            marker.bindPopup(
+              createPopup(mmsi, speed, props, lat, lon)
+            );
+
+            marker.mmsi = mmsi;
 
             markers.push(marker);
 
@@ -122,25 +180,18 @@
         });
 
       })
-      .catch(err => {
-        console.error("API error:", err);
-      });
+      .catch(err => console.error("API error:", err));
   }
 
-  // Load immediately
   loadShips();
-
-  // Refresh every 30s
   setInterval(loadShips, 30000);
 
-  // Search
+  // 🔍 Search
   document.getElementById("search").addEventListener("input", function(e) {
     const value = e.target.value;
 
     markers.forEach(m => {
-      const content = m.getPopup().getContent();
-
-      if (content.includes(value)) {
+      if (!value || m.mmsi.includes(value)) {
         m.setStyle({ color: "yellow" });
       } else {
         m.setStyle({ color: "lime" });
