@@ -1,32 +1,55 @@
 <!DOCTYPE html>
-<html>
+<html lang="fi">
 <head>
-  <title>Fin Sea Scan Pro</title>
   <meta charset="UTF-8" />
+  <title>Fin Sea Scan Pro</title>
 
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
 
   <style>
-    body { margin:0; display:flex; background:#0b0f19; color:white; font-family:Arial; }
-    #map { width:75%; height:100vh; }
-    #sidebar { width:25%; background:#020617; padding:15px; overflow:auto; }
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #0b1220;
+      color: white;
+    }
+
+    #map {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 320px;
+      bottom: 0;
+    }
+
+    #sidebar {
+      position: absolute;
+      right: 0;
+      top: 0;
+      width: 320px;
+      height: 100%;
+      background: #0b1220;
+      padding: 20px;
+      box-shadow: -4px 0 20px rgba(0,0,0,0.5);
+    }
+
+    h1 {
+      font-size: 20px;
+      margin-bottom: 15px;
+    }
 
     input {
-      width:100%;
-      padding:8px;
-      margin-bottom:10px;
-      border-radius:6px;
-      border:none;
+      width: 100%;
+      padding: 10px;
+      border-radius: 6px;
+      border: none;
+      margin-bottom: 20px;
     }
 
-    .ship {
-      padding:8px;
-      border-bottom:1px solid #1f2937;
-      cursor:pointer;
+    .info {
+      font-size: 14px;
+      opacity: 0.7;
     }
-
-    .ship:hover { background:#1f2937; }
   </style>
 </head>
 
@@ -35,95 +58,95 @@
 <div id="map"></div>
 
 <div id="sidebar">
-  <h2>🚢 Fin Sea Scan Pro</h2>
+  <h1>🚢 Fin Sea Scan Pro</h1>
   <input id="search" placeholder="Search MMSI..." />
-  <div id="list"></div>
+  <div class="info">Live AIS data (Digitraffic)</div>
 </div>
 
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
 <script>
+  const map = L.map('map').setView([60.17, 24.94], 5);
 
-const API = "https://fin-sea-scan-enterprise.onrender.com";
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '&copy; OpenStreetMap'
+  }).addTo(map);
 
-const map = L.map('map').setView([60,24],6);
+  let markers = [];
 
-L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png').addTo(map);
+  function clearMarkers() {
+    markers.forEach(m => map.removeLayer(m));
+    markers = [];
+  }
 
-const list = document.getElementById("list");
-const markers = {};
+  function loadShips() {
 
-function getColor(speed){
-  if(speed>20) return "red";
-  if(speed>10) return "orange";
-  return "lime";
-}
-
-// -------------------
-// LOAD SHIPS
-// -------------------
-fetch(API + "/ships")
-.then(r => r.json())
-.then(data => {
-
-  console.log("Ships:", data);
-
-  data.forEach(s => {
-
-    const marker = L.circleMarker([s.lat, s.lon], {
-      color: getColor(s.speed),
-      radius: 6
-    }).addTo(map);
-
-    markers[s.mmsi] = marker;
-
-    const popup = `
-      <div style="width:250px">
-        <img src="https://source.unsplash.com/400x200/?ship" style="width:100%;border-radius:6px"/>
-        <b>MMSI:</b> ${s.mmsi}<br>
-        <b>Speed:</b> ${s.speed} kn<br>
-        <b>Destination:</b> ${s.destination}<br>
-        <b>ETA:</b> ${s.eta} h
-      </div>
-    `;
-
-    marker.bindPopup(popup);
-
-    marker.on("click", () => {
-      fetch(API + "/history/" + s.mmsi)
+    fetch("https://meri.digitraffic.fi/api/ais/v1/locations")
       .then(r => r.json())
-      .then(points => {
-        L.polyline(points.map(p => [p.lat, p.lon]), {color:"yellow"}).addTo(map);
+      .then(data => {
+
+        clearMarkers();
+
+        data.features.forEach(ship => {
+
+          try {
+            const coords = ship.geometry.coordinates;
+            const props = ship.properties;
+
+            if (!coords || !props) return;
+
+            const lat = coords[1];
+            const lon = coords[0];
+
+            const speed = props.sog || 0;
+            const mmsi = props.mmsi || "N/A";
+
+            const marker = L.circleMarker([lat, lon], {
+              radius: 5,
+              color: speed > 15 ? "red" : "lime",
+              fillOpacity: 0.8
+            }).addTo(map);
+
+            marker.bindPopup(`
+              <div style="color:black">
+                <b>MMSI:</b> ${mmsi}<br>
+                <b>Speed:</b> ${speed}<br>
+                <b>Heading:</b> ${props.trueHeading || "-"}
+              </div>
+            `);
+
+            markers.push(marker);
+
+          } catch (e) {}
+
+        });
+
+      })
+      .catch(err => {
+        console.error("API error:", err);
       });
+  }
+
+  // Load immediately
+  loadShips();
+
+  // Refresh every 30s
+  setInterval(loadShips, 30000);
+
+  // Search
+  document.getElementById("search").addEventListener("input", function(e) {
+    const value = e.target.value;
+
+    markers.forEach(m => {
+      const content = m.getPopup().getContent();
+
+      if (content.includes(value)) {
+        m.setStyle({ color: "yellow" });
+      } else {
+        m.setStyle({ color: "lime" });
+      }
     });
-
-    // sidebar
-    const el = document.createElement("div");
-    el.className = "ship";
-    el.innerText = "MMSI: " + s.mmsi;
-
-    el.onclick = () => {
-      map.setView([s.lat, s.lon], 10);
-      marker.openPopup();
-    };
-
-    list.appendChild(el);
-
   });
-
-})
-.catch(err => {
-  console.error("ERROR:", err);
-});
-
-// -------------------
-// SEARCH
-// -------------------
-document.getElementById("search").addEventListener("input", e => {
-  const val = e.target.value;
-
-  Object.keys(markers).forEach(m => {
-    markers[m].setStyle({opacity: m.includes(val) ? 1 : 0.1});
-  });
-});
 
 </script>
 
