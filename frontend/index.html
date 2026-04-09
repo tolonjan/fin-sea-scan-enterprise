@@ -1,73 +1,39 @@
 <!DOCTYPE html>
 <html lang="fi">
 <head>
-  <meta charset="UTF-8" />
-  <title>Fin Sea Scan Pro</title>
+<meta charset="UTF-8" />
+<title>Fin Sea Scan Pro</title>
 
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
 
-  <style>
-    body {
-      margin: 0;
-      font-family: Arial, sans-serif;
-      background: #0b1220;
-      color: white;
-    }
+<style>
+body { margin:0; font-family:Arial; background:#0b1220; color:white; }
 
-    #map {
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 320px;
-      bottom: 0;
-    }
+#map {
+  position:absolute;
+  top:0;
+  left:0;
+  right:320px;
+  bottom:0;
+}
 
-    #sidebar {
-      position: absolute;
-      right: 0;
-      top: 0;
-      width: 320px;
-      height: 100%;
-      background: #0b1220;
-      padding: 20px;
-      box-shadow: -4px 0 20px rgba(0,0,0,0.5);
-    }
+#sidebar {
+  position:absolute;
+  right:0;
+  top:0;
+  width:320px;
+  height:100%;
+  background:#0b1220;
+  padding:20px;
+}
 
-    h1 {
-      font-size: 20px;
-      margin-bottom: 15px;
-    }
-
-    input {
-      width: 100%;
-      padding: 10px;
-      border-radius: 6px;
-      border: none;
-      margin-bottom: 20px;
-    }
-
-    .info {
-      font-size: 13px;
-      opacity: 0.7;
-    }
-
-    .legend {
-      margin-top: 20px;
-      font-size: 12px;
-    }
-
-    .legend div {
-      margin-bottom: 6px;
-    }
-
-    .dot {
-      display: inline-block;
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      margin-right: 6px;
-    }
-  </style>
+input {
+  width:100%;
+  padding:10px;
+  border-radius:6px;
+  border:none;
+}
+</style>
 </head>
 
 <body>
@@ -75,129 +41,111 @@
 <div id="map"></div>
 
 <div id="sidebar">
-  <h1>🚢 Fin Sea Scan Pro</h1>
-
+  <h2>🚢 Fin Sea Scan Pro</h2>
   <input id="search" placeholder="Search MMSI..." />
-
-  <div class="info">Live AIS data (Digitraffic)</div>
-
-  <div class="legend">
-    <div><span class="dot" style="background:lime"></span>Normal</div>
-    <div><span class="dot" style="background:red"></span>Fast vessel</div>
-  </div>
 </div>
 
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
 <script>
-  const map = L.map('map').setView([60.17, 24.94], 5);
+const map = L.map('map').setView([60.17, 24.94], 5);
 
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-    attribution: '&copy; OpenStreetMap'
-  }).addTo(map);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
 
-  let markers = [];
+let markers = [];
+let tracks = {};
 
-  function clearMarkers() {
-    markers.forEach(m => map.removeLayer(m));
-    markers = [];
-  }
+function clearMap() {
+  markers.forEach(m => map.removeLayer(m));
+  markers = [];
+}
 
-  function createPopup(mmsi, speed, props, lat, lon) {
-    return `
-      <div style="
-        font-family: Arial;
-        color: #111;
-        min-width: 230px;
-      ">
-
-        <div style="
-          font-weight: bold;
-          font-size: 15px;
-          margin-bottom: 6px;
-          color: #0b3d91;
-        ">
-          🚢 Vessel ${mmsi}
-        </div>
-
-        <div style="font-size: 13px; line-height: 1.5">
-
-          <div><b>Speed:</b> ${speed} kn</div>
-          <div><b>Course:</b> ${props.cog || "-"}°</div>
-          <div><b>Heading:</b> ${props.trueHeading || "-"}°</div>
-
-          <hr style="margin:6px 0; border:0; border-top:1px solid #ddd;">
-
-          <div><b>Navigation:</b> ${props.navStat || "Unknown"}</div>
-
-          <div style="margin-top:6px; font-size:12px; color:#555">
-            📍 ${lat.toFixed(3)}, ${lon.toFixed(3)}
-          </div>
-
-        </div>
-
-      </div>
-    `;
-  }
-
-  function loadShips() {
-
-    fetch("https://meri.digitraffic.fi/api/ais/v1/locations")
-      .then(r => r.json())
-      .then(data => {
-
-        clearMarkers();
-
-        data.features.forEach(ship => {
-
-          try {
-            const coords = ship.geometry.coordinates;
-            const props = ship.properties;
-
-            if (!coords || !props) return;
-
-            const lat = coords[1];
-            const lon = coords[0];
-            const speed = props.sog || 0;
-            const mmsi = props.mmsi || "N/A";
-
-            const marker = L.circleMarker([lat, lon], {
-              radius: 5,
-              color: speed > 15 ? "red" : "lime",
-              fillOpacity: 0.9
-            }).addTo(map);
-
-            marker.bindPopup(
-              createPopup(mmsi, speed, props, lat, lon)
-            );
-
-            marker.mmsi = mmsi;
-
-            markers.push(marker);
-
-          } catch (e) {}
-
-        });
-
-      })
-      .catch(err => console.error("API error:", err));
-  }
-
-  loadShips();
-  setInterval(loadShips, 30000);
-
-  // 🔍 Search
-  document.getElementById("search").addEventListener("input", function(e) {
-    const value = e.target.value;
-
-    markers.forEach(m => {
-      if (!value || m.mmsi.includes(value)) {
-        m.setStyle({ color: "yellow" });
-      } else {
-        m.setStyle({ color: "lime" });
-      }
-    });
+function createShipIcon(heading) {
+  return L.divIcon({
+    html: `<div style="
+      transform: rotate(${heading || 0}deg);
+      font-size:18px;
+    ">🚢</div>`,
+    className: ""
   });
+}
+
+function loadShips() {
+
+  fetch("https://meri.digitraffic.fi/api/ais/v1/locations")
+    .then(r => r.json())
+    .then(data => {
+
+      clearMap();
+
+      data.features.forEach(ship => {
+
+        try {
+          const coords = ship.geometry.coordinates;
+          const props = ship.properties;
+
+          if (!coords || !props) return;
+
+          const lat = coords[1];
+          const lon = coords[0];
+          const mmsi = props.mmsi;
+          const speed = props.sog || 0;
+          const heading = props.trueHeading || 0;
+
+          // 🚢 ICON
+          const marker = L.marker([lat, lon], {
+            icon: createShipIcon(heading)
+          }).addTo(map);
+
+          // 📈 TRACK LINE
+          if (!tracks[mmsi]) tracks[mmsi] = [];
+
+          tracks[mmsi].push([lat, lon]);
+
+          if (tracks[mmsi].length > 10) {
+            tracks[mmsi].shift();
+          }
+
+          L.polyline(tracks[mmsi], {
+            color: "cyan",
+            weight: 1
+          }).addTo(map);
+
+          // 💬 POPUP
+          marker.bindPopup(`
+            <div style="color:black">
+              <b>MMSI:</b> ${mmsi}<br>
+              <b>Speed:</b> ${speed} kn<br>
+              <b>Heading:</b> ${heading}
+            </div>
+          `);
+
+          marker.mmsi = mmsi;
+
+          markers.push(marker);
+
+        } catch(e) {}
+
+      });
+
+    });
+}
+
+loadShips();
+setInterval(loadShips, 20000);
+
+// 🔍 SEARCH
+document.getElementById("search").addEventListener("input", e => {
+  const val = e.target.value;
+
+  markers.forEach(m => {
+    if (!val || m.mmsi.toString().includes(val)) {
+      m.getElement().style.filter = "drop-shadow(0 0 6px yellow)";
+    } else {
+      m.getElement().style.filter = "";
+    }
+  });
+});
 
 </script>
 
